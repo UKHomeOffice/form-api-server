@@ -592,7 +592,7 @@ pipeline:
       branch: master
       event: push
 
- create-change-desc-production:
+  create-change-desc-production:
     image: docker:git
     commands:
       - git show --name-only >> $SNOW_DESC_FILE
