@@ -1,0 +1,52 @@
+#FROM digitalpatterns/node:latest AS build
+FROM node:lts-alpine as base
+COPY . /src
+WORKDIR /src
+RUN npm ci
+RUN npm run build-ts
+
+FROM base as build-local
+RUN npm prune --local
+
+FROM base as build-dev
+RUN npm prune --development
+
+FROM base as build-prod
+RUN npm prune --production
+
+#FROM digitalpatterns/node:latest
+FROM node:lts-alpine as formapi-local
+WORKDIR /app
+RUN mkdir -p /app
+COPY --from=build-local /src/node_modules node_modules
+COPY --from=build-local /src/dist dist
+COPY --from=build-local /src/swagger swagger
+RUN chown -R node:node /app
+ENV NODE_ENV='local'
+USER 1000
+EXPOSE 8080
+ENTRYPOINT node_modules/.bin/sequelize db:migrate --env ${NODE_ENV} --config dist/config/configHook.js --debug --migrations-path dist/migrations && exec node dist/bootstrap.js
+
+FROM node:lts-alpine as formapi-dev
+WORKDIR /app
+RUN mkdir -p /app
+COPY --from=build-dev /src/node_modules node_modules
+COPY --from=build-dev /src/dist dist
+COPY --from=build-dev /src/swagger swagger
+RUN chown -R node:node /app
+ENV NODE_ENV='development'
+USER 1000
+EXPOSE 8080
+ENTRYPOINT node_modules/.bin/sequelize db:migrate --env ${NODE_ENV} --config dist/config/configHook.js --debug --migrations-path dist/migrations && exec node dist/bootstrap.js
+
+FROM node:lts-alpine as formapi-prod
+WORKDIR /app
+RUN mkdir -p /app
+COPY --from=build-prod /src/node_modules node_modules
+COPY --from=build-prod /src/dist dist
+COPY --from=build-prod /src/swagger swagger
+RUN chown -R node:node /app
+ENV NODE_ENV='production'
+USER 1000
+EXPOSE 8080
+ENTRYPOINT node_modules/.bin/sequelize db:migrate --env ${NODE_ENV} --config dist/config/configHook.js --debug --migrations-path dist/migrations && exec node dist/bootstrap.js
