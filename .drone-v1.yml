@@ -17,7 +17,7 @@ steps:
     AWS_SECRET_ACCESS_KEY:
       from_secret: DEV_DRONE_AWS_SECRET_ACCESS_KEY
     DEPLOY_ENV: dev
-    DRONE_SERVER: https://drone.acp.homeoffice.gov.uk
+    DRONE_SERVER: https://drone-gh.acp.homeoffice.gov.uk
     DRONE_TOKEN:
       from_secret: DRONE_PUBLIC_TOKEN
   when:
@@ -35,7 +35,7 @@ steps:
     AWS_SECRET_ACCESS_KEY:
       from_secret: STAGING_DRONE_AWS_SECRET_ACCESS_KEY
     DEPLOY_ENV: staging
-    DRONE_SERVER: https://drone.acp.homeoffice.gov.uk
+    DRONE_SERVER: https://drone-gh.acp.homeoffice.gov.uk
     DRONE_TOKEN:
       from_secret: DRONE_PUBLIC_TOKEN
   when:
@@ -53,7 +53,7 @@ steps:
     AWS_SECRET_ACCESS_KEY:
       from_secret: PRODUCTION_DRONE_AWS_SECRET_ACCESS_KEY
     DEPLOY_ENV: production
-    DRONE_SERVER: https://drone.acp.homeoffice.gov.uk
+    DRONE_SERVER: https://drone-gh.acp.homeoffice.gov.uk
     DRONE_TOKEN:
       from_secret: DRONE_PUBLIC_TOKEN
   when:
@@ -76,7 +76,11 @@ steps:
   pull: if-not-exists
   image: quay.io/ukhomeofficedigital/drone-docker
   commands:
+  - n=0; while [ "$n " -lt 60 ] && [ ! -e /var/run/docker.sock ]; do n=$(( n + 1 )); sleep 1; done
   - docker build -t form-api-server:$${DRONE_COMMIT_SHA} .
+  volumes:
+  - name: dockersock
+    path: /var/run
   when:
     event:
     - push
@@ -629,6 +633,9 @@ steps:
     image_name: form-api-server:${DRONE_COMMIT_SHA}
     local_image: true
     tolerate: low
+  volumes:
+  - name: dockersock
+    path: /var/run
   when:
     branch:
     - master
@@ -724,5 +731,24 @@ steps:
     status:
     - success
     - failure
+
+services:
+- name: docker
+  image: quay.io/ukhomeofficedigital/drone-docker
+  volumes:
+  - name: dockersock
+    path: /var/run
+
+- name: anchore-submission-server
+  image: quay.io/ukhomeofficedigital/anchore-submission:latest
+  commands:
+  - /anchore-submission server
+  volumes:
+  - name: dockersock
+    path: /var/run
+
+volumes:
+- name: dockersock
+  temp: {}
 
 ...
