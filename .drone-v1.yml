@@ -412,11 +412,6 @@ steps:
     - master
     event:
     - push
-    target:
-    - dev_cerberus
-
-      
-
 
 - name: deploy_to_staging
   pull: if-not-exists
