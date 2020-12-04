@@ -412,6 +412,8 @@ steps:
     - master
     event:
     - push
+    target:
+    - dev_cerberus
 
       
 
