@@ -75,30 +75,13 @@ steps:
     event:
     - push
 
-      #- name: build
-      #  pull: if-not-exists
-      #  image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/dind
-      #  commands:
-      #  - n=0; while [ "$n" -lt 60 ] && [ ! docker stats --no-stream ]; do n=$(( n + 1 )); sleep 1; done
-      #  - docker build -t form-api-server:$${DRONE_COMMIT_SHA} .
-      #  when:
-      #    event:
-      #    - push
-
-- name: image_to_quay
-  image: plugins/docker
-  settings:
-    registry: quay.io
-    repo: quay.io/ukhomeofficedigital/cop-form-api-server
-    tags: ${DRONE_COMMIT_SHA}
-  environment:
-    DOCKER_PASSWORD:
-      from_secret: QUAY_PASSWORD
-    DOCKER_USERNAME:
-      from_secret: QUAY_USERNAME
+- name: build
+  pull: if-not-exists
+  image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/dind
+  commands:
+  - n=0; while [ "$n" -lt 60 ] && [ ! docker stats --no-stream ]; do n=$(( n + 1 )); sleep 1; done
+  - docker build -t form-api-server:$${DRONE_COMMIT_SHA} .
   when:
-    branch:
-    - master
     event:
     - push
 
@@ -111,6 +94,23 @@ steps:
     LOCAL_IMAGE: true
     TOLERATE: low
     WHITELIST_FILE: whitelist
+  when:
+    branch:
+    - master
+    event:
+    - push
+
+- name: image_to_quay
+  image: plugins/docker
+  settings:
+    registry: quay.io
+    repo: quay.io/ukhomeofficedigital/cop-form-api-server
+    tags: ${DRONE_COMMIT_SHA}
+  environment:
+    DOCKER_PASSWORD:
+      from_secret: QUAY_PASSWORD
+    DOCKER_USERNAME:
+      from_secret: QUAY_USERNAME
   when:
     branch:
     - master
