@@ -519,6 +519,110 @@ steps:
     target:
     - staging
 
+- name: deploy_to_staging_cerberus
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/kd
+  commands:
+  - export API_FORM_TAG=$${DRONE_COMMIT_SHA}
+  - kd --insecure-skip-tls-verify -f kube/cert.yml
+  - kd --insecure-skip-tls-verify -f kube/secret.yml
+  - kd --insecure-skip-tls-verify -f kube/network-policy.yml
+  - kd --insecure-skip-tls-verify -f kube/service.yml
+  - kd --insecure-skip-tls-verify -f kube/deployment.yml --timeout=5m
+  - kd --insecure-skip-tls-verify -f kube/ingress.yml
+  environment:
+    API_FORM_BUSINESS_KEY_ENABLED:
+      from_secret: STAGING_API_FORM_CERBERUS_BUSINESS_KEY_ENABLED
+    API_FORM_BUSINESS_KEY_PREFIX:
+      from_secret: STAGING_API_FORM_CERBERUS_BUSINESS_KEY_PREFIX
+    API_FORM_CACHE_FORM_MAX_AGE:
+      from_secret: STAGING_API_FORM_CACHE_FORM_MAX_AGE
+    API_FORM_CACHE_FORM_MAX_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_FORM_MAX_ENTRIES
+    API_FORM_CACHE_ROLE_MAX_AGE:
+      from_secret: STAGING_API_FORM_CACHE_ROLE_MAX_AGE
+    API_FORM_CACHE_ROLE_MAX_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_ROLE_MAX_ENTRIES
+    API_FORM_CACHE_USER_FORM_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_USER_FORM_ENTRIES
+    API_FORM_CACHE_USER_MAX_AGE:
+      from_secret: STAGING_API_FORM_CACHE_USER_MAX_AGE
+    API_FORM_CACHE_USER_MAX_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_USER_MAX_ENTRIES
+    API_FORM_CACHE_USER_ROLE_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_USER_ROLE_ENTRIES
+    API_FORM_EDIT_ROLES:
+      from_secret: STAGING_API_FORM_CERBERUS_EDIT_ROLES
+    API_FORM_IMAGE:
+      from_secret: STAGING_API_FORM_IMAGE
+    API_FORM_KEYCLOAK_ADMIN_PASSWORD:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ADMIN_PASSWORD
+    API_FORM_KEYCLOAK_ADMIN_USERNAME:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ADMIN_USERNAME
+    API_FORM_KEYCLOAK_BEARER_ONLY:
+      From_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_BEARER_ONLY
+    API_FORM_KEYCLOAK_CLIENT_ID:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_CLIENT_ID
+    API_FORM_KEYCLOAK_ROLES:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ROLES
+    API_FORM_LOG_CHANGE_TIMEOUT:
+      from_secret: STAGING_API_FORM_LOG_CHANGE_TIMEOUT
+    API_FORM_LOG_ENABLE_CHANGE:
+      from_secret: STAGING_API_FORM_LOG_ENABLE_CHANGE
+    API_FORM_LOG_ENABLE_QUERY:
+      from_secret: STAGING_API_FORM_LOG_ENABLE_QUERY
+    API_FORM_NAME:
+      from_secret: STAGING_API_FORM_NAME
+    API_FORM_PORT:
+      from_secret: STAGING_API_FORM_PORT
+    API_FORM_URL:
+      from_secret: STAGING_API_FORM_CERBERUS_URL
+    DB_FORM_DEFAULT_DBNAME:
+      from_secret: STAGING_DB_CERBERUS_DEFAULT_DBNAME
+    DB_FORM_DEFAULT_PASSWORD:
+      from_secret: STAGING_DB_CERBERUS_DEFAULT_PASSWORD
+    DB_FORM_DEFAULT_USERNAME:
+      from_secret: STAGING_DB_CERBERUS_DEFAULT_USERNAME
+    DB_FORM_HOSTNAME:
+      from_secret: STAGING_DB_CERBERUS_HOSTNAME
+    DB_FORM_PORT:
+      from_secret: STAGING_DB_CERBERUS_PORT
+    DB_FORM_SSL:
+      from_secret: STAGING_DB_FORM_SSL
+    KEYCLOAK_PROTOCOL:
+      from_secret: PROTOCOL_HTTPS
+    KEYCLOAK_REALM:
+      from_secret: STAGING_KEYCLOAK_REALM
+    KEYCLOAK_URL:
+      from_secret: STAGING_KEYCLOAK_URL
+    KUBE_NAMESPACE:
+      from_secret: STAGING_KUBE_NAMESPACE_COP_CERBERUS
+    KUBE_SERVER:
+      from_secret: STAGING_KUBE_SERVER
+    KUBE_TOKEN:
+      from_secret: STAGING_CERBERUS_KUBE_TOKEN
+    NGINX_IMAGE:
+      from_secret: NGINX_IMAGE
+    NGINX_TAG:
+      from_secret: NGINX_TAG
+    REDIS_PORT:
+      from_secret: STAGING_REDIS_CERBERUS_PORT
+    REDIS_SSL:
+      from_secret: STAGING_REDIS_CERBERUS_SSL
+    REDIS_TOKEN:
+      from_secret: STAGING_REDIS_CERBERUS_TOKEN
+    REDIS_URL:
+      from_secret: STAGING_REDIS_CERBERUS_URL
+    WHITELIST:
+      from_secret: STAGING_WHITELIST
+  when:
+    branch:
+    - master
+    event:
+    - promote
+    target:
+    - staging_cerberus
+
 - name: deploy_to_production
   pull: if-not-exists
   image: quay.io/ukhomeofficedigital/kd
