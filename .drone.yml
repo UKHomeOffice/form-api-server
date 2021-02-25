@@ -1,7 +1,7 @@
 ---
 kind: pipeline
 type: kubernetes
-name: matrix-1
+name: build
 
 platform:
   os: linux
@@ -117,6 +117,46 @@ steps:
     event:
     - push
 
+- name: notify
+  pull: if-not-exists
+  image: plugins/slack
+  settings:
+    channel: cop-deployments
+    template: "{{#build.deployTo}}\n  *{{repo.name}} - Build {{build.number}} - {{uppercasefirst build.deployTo}} - {{uppercase build.status}}*\n  {{build.link}}\n{{else}}\n  *{{repo.name}} - Build {{build.number}} - Development - {{uppercase build.status}}*\n  {{build.link}}\n{{/build.deployTo}}\n"
+    username: Drone Build Watcher
+  environment:
+    SLACK_WEBHOOK:
+      from_secret: SLACK_WEBHOOK
+  when:
+    branch:
+    - master
+    event:
+    - push
+    - promote
+    status:
+    - success
+    - failure
+
+services:
+- name: docker
+  image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/dind
+
+- name: anchore-submission-server
+  pull: always
+  image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/anchore-submission:latest
+  commands:
+  - /run.sh server
+
+---
+kind: pipeline
+type: kubernetes
+name: deploy_cop
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
 - name: deploy_to_dev
   pull: if-not-exists
   image: quay.io/ukhomeofficedigital/kd
@@ -213,210 +253,6 @@ steps:
       from_secret: DEV_REDIS_TOKEN
     REDIS_URL:
       from_secret: DEV_REDIS_URL
-    WHITELIST:
-      from_secret: DEV_WHITELIST
-  when:
-    branch:
-    - master
-    event:
-    - push
-
-- name: deploy_to_dev_eforms
-  pull: if-not-exists
-  image: quay.io/ukhomeofficedigital/kd
-  commands:
-  - export API_FORM_TAG=$${DRONE_COMMIT_SHA}
-  - kd --insecure-skip-tls-verify -f kube/cert.yml
-  - kd --insecure-skip-tls-verify -f kube/secret.yml
-  - kd --insecure-skip-tls-verify -f kube/network-policy.yml
-  - kd --insecure-skip-tls-verify -f kube/service.yml
-  - kd --insecure-skip-tls-verify -f kube/deployment.yml --timeout=5m
-  - kd --insecure-skip-tls-verify -f kube/ingress.yml
-  environment:
-    API_FORM_BUSINESS_KEY_ENABLED:
-      from_secret: DEV_API_FORM_EFORMS_BUSINESS_KEY_ENABLED
-    API_FORM_BUSINESS_KEY_PREFIX:
-      from_secret: DEV_API_FORM_EFORMS_BUSINESS_KEY_PREFIX
-    API_FORM_CACHE_FORM_MAX_AGE:
-      from_secret: DEV_API_FORM_CACHE_FORM_MAX_AGE
-    API_FORM_CACHE_FORM_MAX_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_FORM_MAX_ENTRIES
-    API_FORM_CACHE_ROLE_MAX_AGE:
-      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_AGE
-    API_FORM_CACHE_ROLE_MAX_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_ENTRIES
-    API_FORM_CACHE_USER_FORM_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_USER_FORM_ENTRIES
-    API_FORM_CACHE_USER_MAX_AGE:
-      from_secret: DEV_API_FORM_CACHE_USER_MAX_AGE
-    API_FORM_CACHE_USER_MAX_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_USER_MAX_ENTRIES
-    API_FORM_CACHE_USER_ROLE_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_USER_ROLE_ENTRIES
-    API_FORM_EDIT_ROLES:
-      from_secret: DEV_API_FORM_EFORMS_EDIT_ROLES
-    API_FORM_IMAGE:
-      from_secret: DEV_API_FORM_IMAGE
-    API_FORM_KEYCLOAK_ADMIN_PASSWORD:
-      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_ADMIN_PASSWORD
-    API_FORM_KEYCLOAK_ADMIN_USERNAME:
-      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_ADMIN_USERNAME
-    API_FORM_KEYCLOAK_BEARER_ONLY:
-      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_BEARER_ONLY
-    API_FORM_KEYCLOAK_CLIENT_ID:
-      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_CLIENT_ID
-    API_FORM_KEYCLOAK_ROLES:
-      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_ROLES
-    API_FORM_LOG_CHANGE_TIMEOUT:
-      from_secret: DEV_API_FORM_LOG_CHANGE_TIMEOUT
-    API_FORM_LOG_ENABLE_CHANGE:
-      from_secret: DEV_API_FORM_LOG_ENABLE_CHANGE
-    API_FORM_LOG_ENABLE_QUERY:
-      from_secret: DEV_API_FORM_LOG_ENABLE_QUERY
-    API_FORM_NAME:
-      from_secret: DEV_API_FORM_NAME
-    API_FORM_PORT:
-      from_secret: DEV_API_FORM_PORT
-    API_FORM_URL:
-      from_secret: DEV_API_FORM_EFORMS_URL
-    DB_FORM_DEFAULT_DBNAME:
-      from_secret: DEV_DB_EFORMS_DEFAULT_DBNAME
-    DB_FORM_DEFAULT_PASSWORD:
-      from_secret: DEV_DB_EFORMS_DEFAULT_PASSWORD
-    DB_FORM_DEFAULT_USERNAME:
-      from_secret: DEV_DB_EFORMS_DEFAULT_USERNAME
-    DB_FORM_HOSTNAME:
-      from_secret: DEV_DB_EFORMS_HOSTNAME
-    DB_FORM_PORT:
-      from_secret: DEV_DB_EFORMS_PORT
-    DB_FORM_SSL:
-      from_secret: DEV_DB_FORM_SSL
-    KEYCLOAK_PROTOCOL:
-      from_secret: PROTOCOL_HTTPS
-    KEYCLOAK_REALM:
-      from_secret: DEV_KEYCLOAK_REALM
-    KEYCLOAK_URL:
-      from_secret: DEV_KEYCLOAK_URL
-    KUBE_NAMESPACE:
-      from_secret: DEV_KUBE_NAMESPACE_COP_EFORMS
-    KUBE_SERVER:
-      from_secret: DEV_KUBE_SERVER
-    KUBE_TOKEN:
-      from_secret: DEV_EFORMS_KUBE_TOKEN
-    NGINX_IMAGE:
-      from_secret: NGINX_IMAGE
-    NGINX_TAG:
-      from_secret: NGINX_TAG
-    REDIS_PORT:
-      from_secret: DEV_REDIS_EFORMS_PORT
-    REDIS_SSL:
-      from_secret: DEV_REDIS_EFORMS_SSL
-    REDIS_TOKEN:
-      from_secret: DEV_REDIS_EFORMS_TOKEN
-    REDIS_URL:
-      from_secret: DEV_REDIS_EFORMS_URL
-    WHITELIST:
-      from_secret: DEV_WHITELIST
-  when:
-    branch:
-    - master
-    event:
-    - push
-
-- name: deploy_to_dev_cerberus
-  pull: if-not-exists
-  image: quay.io/ukhomeofficedigital/kd
-  commands:
-  - export API_FORM_TAG=$${DRONE_COMMIT_SHA}
-  - kd --insecure-skip-tls-verify -f kube/cert.yml
-  - kd --insecure-skip-tls-verify -f kube/secret.yml
-  - kd --insecure-skip-tls-verify -f kube/network-policy.yml
-  - kd --insecure-skip-tls-verify -f kube/service.yml
-  - kd --insecure-skip-tls-verify -f kube/deployment.yml --timeout=5m
-  - kd --insecure-skip-tls-verify -f kube/ingress.yml
-  environment:
-    API_FORM_BUSINESS_KEY_ENABLED:
-      from_secret: DEV_API_FORM_CERBERUS_BUSINESS_KEY_ENABLED
-    API_FORM_BUSINESS_KEY_PREFIX:
-      from_secret: DEV_API_FORM_CERBERUS_BUSINESS_KEY_PREFIX
-    API_FORM_CACHE_FORM_MAX_AGE:
-      from_secret: DEV_API_FORM_CACHE_FORM_MAX_AGE
-    API_FORM_CACHE_FORM_MAX_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_FORM_MAX_ENTRIES
-    API_FORM_CACHE_ROLE_MAX_AGE:
-      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_AGE
-    API_FORM_CACHE_ROLE_MAX_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_ENTRIES
-    API_FORM_CACHE_USER_FORM_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_USER_FORM_ENTRIES
-    API_FORM_CACHE_USER_MAX_AGE:
-      from_secret: DEV_API_FORM_CACHE_USER_MAX_AGE
-    API_FORM_CACHE_USER_MAX_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_USER_MAX_ENTRIES
-    API_FORM_CACHE_USER_ROLE_ENTRIES:
-      from_secret: DEV_API_FORM_CACHE_USER_ROLE_ENTRIES
-    API_FORM_EDIT_ROLES:
-      from_secret: DEV_API_FORM_CERBERUS_EDIT_ROLES
-    API_FORM_IMAGE:
-      from_secret: DEV_API_FORM_IMAGE
-    API_FORM_KEYCLOAK_ADMIN_PASSWORD:
-      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_ADMIN_PASSWORD
-    API_FORM_KEYCLOAK_ADMIN_USERNAME:
-      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_ADMIN_USERNAME
-    API_FORM_KEYCLOAK_BEARER_ONLY:
-      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_BEARER_ONLY
-    API_FORM_KEYCLOAK_CLIENT_ID:
-      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_CLIENT_ID
-    API_FORM_KEYCLOAK_ROLES:
-      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_ROLES
-    API_FORM_LOG_CHANGE_TIMEOUT:
-      from_secret: DEV_API_FORM_LOG_CHANGE_TIMEOUT
-    API_FORM_LOG_ENABLE_CHANGE:
-      from_secret: DEV_API_FORM_LOG_ENABLE_CHANGE
-    API_FORM_LOG_ENABLE_QUERY:
-      from_secret: DEV_API_FORM_LOG_ENABLE_QUERY
-    API_FORM_NAME:
-      from_secret: DEV_API_FORM_NAME
-    API_FORM_PORT:
-      from_secret: DEV_API_FORM_PORT
-    API_FORM_URL:
-      from_secret: DEV_API_FORM_CERBERUS_URL
-    DB_FORM_DEFAULT_DBNAME:
-      from_secret: DEV_DB_CERBERUS_DEFAULT_DBNAME
-    DB_FORM_DEFAULT_PASSWORD:
-      from_secret: DEV_DB_CERBERUS_DEFAULT_PASSWORD
-    DB_FORM_DEFAULT_USERNAME:
-      from_secret: DEV_DB_CERBERUS_DEFAULT_USERNAME
-    DB_FORM_HOSTNAME:
-      from_secret: DEV_DB_CERBERUS_HOSTNAME
-    DB_FORM_PORT:
-      from_secret: DEV_DB_CERBERUS_PORT
-    DB_FORM_SSL:
-      from_secret: DEV_DB_FORM_SSL
-    KEYCLOAK_PROTOCOL:
-      from_secret: PROTOCOL_HTTPS
-    KEYCLOAK_REALM:
-      from_secret: DEV_KEYCLOAK_REALM
-    KEYCLOAK_URL:
-      from_secret: DEV_KEYCLOAK_URL
-    KUBE_NAMESPACE:
-      from_secret: DEV_KUBE_NAMESPACE_COP_CERBERUS
-    KUBE_SERVER:
-      from_secret: DEV_KUBE_SERVER
-    KUBE_TOKEN:
-      from_secret: DEV_CERBERUS_KUBE_TOKEN
-    NGINX_IMAGE:
-      from_secret: NGINX_IMAGE
-    NGINX_TAG:
-      from_secret: NGINX_TAG
-    REDIS_PORT:
-      from_secret: DEV_REDIS_CERBERUS_PORT
-    REDIS_SSL:
-      from_secret: DEV_REDIS_CERBERUS_SSL
-    REDIS_TOKEN:
-      from_secret: DEV_REDIS_CERBERUS_TOKEN
-    REDIS_URL:
-      from_secret: DEV_REDIS_CERBERUS_URL
     WHITELIST:
       from_secret: DEV_WHITELIST
   when:
@@ -531,110 +367,6 @@ steps:
     target:
     - staging
 
-- name: deploy_to_staging_cerberus
-  pull: if-not-exists
-  image: quay.io/ukhomeofficedigital/kd
-  commands:
-  - export API_FORM_TAG=$${DRONE_COMMIT_SHA}
-  - kd --insecure-skip-tls-verify -f kube/cert.yml
-  - kd --insecure-skip-tls-verify -f kube/secret.yml
-  - kd --insecure-skip-tls-verify -f kube/network-policy.yml
-  - kd --insecure-skip-tls-verify -f kube/service.yml
-  - kd --insecure-skip-tls-verify -f kube/deployment.yml --timeout=5m
-  - kd --insecure-skip-tls-verify -f kube/ingress.yml
-  environment:
-    API_FORM_BUSINESS_KEY_ENABLED:
-      from_secret: STAGING_API_FORM_CERBERUS_BUSINESS_KEY_ENABLED
-    API_FORM_BUSINESS_KEY_PREFIX:
-      from_secret: STAGING_API_FORM_CERBERUS_BUSINESS_KEY_PREFIX
-    API_FORM_CACHE_FORM_MAX_AGE:
-      from_secret: STAGING_API_FORM_CACHE_FORM_MAX_AGE
-    API_FORM_CACHE_FORM_MAX_ENTRIES:
-      from_secret: STAGING_API_FORM_CACHE_FORM_MAX_ENTRIES
-    API_FORM_CACHE_ROLE_MAX_AGE:
-      from_secret: STAGING_API_FORM_CACHE_ROLE_MAX_AGE
-    API_FORM_CACHE_ROLE_MAX_ENTRIES:
-      from_secret: STAGING_API_FORM_CACHE_ROLE_MAX_ENTRIES
-    API_FORM_CACHE_USER_FORM_ENTRIES:
-      from_secret: STAGING_API_FORM_CACHE_USER_FORM_ENTRIES
-    API_FORM_CACHE_USER_MAX_AGE:
-      from_secret: STAGING_API_FORM_CACHE_USER_MAX_AGE
-    API_FORM_CACHE_USER_MAX_ENTRIES:
-      from_secret: STAGING_API_FORM_CACHE_USER_MAX_ENTRIES
-    API_FORM_CACHE_USER_ROLE_ENTRIES:
-      from_secret: STAGING_API_FORM_CACHE_USER_ROLE_ENTRIES
-    API_FORM_EDIT_ROLES:
-      from_secret: STAGING_API_FORM_CERBERUS_EDIT_ROLES
-    API_FORM_IMAGE:
-      from_secret: STAGING_API_FORM_IMAGE
-    API_FORM_KEYCLOAK_ADMIN_PASSWORD:
-      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ADMIN_PASSWORD
-    API_FORM_KEYCLOAK_ADMIN_USERNAME:
-      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ADMIN_USERNAME
-    API_FORM_KEYCLOAK_BEARER_ONLY:
-      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_BEARER_ONLY
-    API_FORM_KEYCLOAK_CLIENT_ID:
-      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_CLIENT_ID
-    API_FORM_KEYCLOAK_ROLES:
-      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ROLES
-    API_FORM_LOG_CHANGE_TIMEOUT:
-      from_secret: STAGING_API_FORM_LOG_CHANGE_TIMEOUT
-    API_FORM_LOG_ENABLE_CHANGE:
-      from_secret: STAGING_API_FORM_LOG_ENABLE_CHANGE
-    API_FORM_LOG_ENABLE_QUERY:
-      from_secret: STAGING_API_FORM_LOG_ENABLE_QUERY
-    API_FORM_NAME:
-      from_secret: STAGING_API_FORM_NAME
-    API_FORM_PORT:
-      from_secret: STAGING_API_FORM_PORT
-    API_FORM_URL:
-      from_secret: STAGING_API_FORM_CERBERUS_URL
-    DB_FORM_DEFAULT_DBNAME:
-      from_secret: STAGING_DB_CERBERUS_DEFAULT_DBNAME
-    DB_FORM_DEFAULT_PASSWORD:
-      from_secret: STAGING_DB_CERBERUS_DEFAULT_PASSWORD
-    DB_FORM_DEFAULT_USERNAME:
-      from_secret: STAGING_DB_CERBERUS_DEFAULT_USERNAME
-    DB_FORM_HOSTNAME:
-      from_secret: STAGING_DB_CERBERUS_HOSTNAME
-    DB_FORM_PORT:
-      from_secret: STAGING_DB_CERBERUS_PORT
-    DB_FORM_SSL:
-      from_secret: STAGING_DB_FORM_SSL
-    KEYCLOAK_PROTOCOL:
-      from_secret: PROTOCOL_HTTPS
-    KEYCLOAK_REALM:
-      from_secret: STAGING_KEYCLOAK_REALM
-    KEYCLOAK_URL:
-      from_secret: STAGING_KEYCLOAK_URL
-    KUBE_NAMESPACE:
-      from_secret: STAGING_KUBE_NAMESPACE_COP_CERBERUS
-    KUBE_SERVER:
-      from_secret: STAGING_KUBE_SERVER
-    KUBE_TOKEN:
-      from_secret: STAGING_CERBERUS_KUBE_TOKEN
-    NGINX_IMAGE:
-      from_secret: NGINX_IMAGE
-    NGINX_TAG:
-      from_secret: NGINX_TAG
-    REDIS_PORT:
-      from_secret: STAGING_REDIS_CERBERUS_PORT
-    REDIS_SSL:
-      from_secret: STAGING_REDIS_CERBERUS_SSL
-    REDIS_TOKEN:
-      from_secret: STAGING_REDIS_CERBERUS_TOKEN
-    REDIS_URL:
-      from_secret: STAGING_REDIS_CERBERUS_URL
-    WHITELIST:
-      from_secret: STAGING_WHITELIST
-  when:
-    branch:
-    - master
-    event:
-    - promote
-    target:
-    - staging_cerberus
-
 - name: deploy_to_production
   pull: if-not-exists
   image: quay.io/ukhomeofficedigital/kd
@@ -740,6 +472,201 @@ steps:
     - promote
     target:
     - production
+
+- name: create-change-desc-production
+  pull: if-not-exists
+  image: docker:git
+  commands:
+  - n=0; while [ "$n" -lt 60 ] && [ ! docker stats --no-stream ]; do n=$(( n + 1 )); sleep 1; done
+  - git show --name-only >> $SNOW_DESC_FILE
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+  when:
+    event:
+    - promote
+    target:
+    - production
+
+- name: open-snow-change-production
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/snowtify:latest
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_ENDPOINT:
+      from_secret: PRODUCTION_SERVICE_NOW_URL
+    SNOW_EXTERNAL_ID: ${DRONE_REPO}:${DRONE_COMMIT_SHA}
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+    SNOW_PROD_PASS:
+      from_secret: PRODUCTION_SERVICE_NOW_PASSWORD
+    SNOW_PROD_USER:
+      from_secret: PRODUCTION_SERVICE_NOW_USERNAME
+  when:
+    event:
+    - promote
+    target:
+    - production
+
+- name: complete-snow-change-production
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/snowtify:latest
+  settings:
+    comments: Successful deployment of ${DRONE_REPO}:${DRONE_COMMIT_SHA}
+    deployment_outcome: success
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_ENDPOINT:
+      from_secret: PRODUCTION_SERVICE_NOW_URL
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+    SNOW_PROD_PASS:
+      from_secret: PRODUCTION_SERVICE_NOW_PASSWORD
+    SNOW_PROD_USER:
+      from_secret: PRODUCTION_SERVICE_NOW_USERNAME
+  when:
+    event:
+    - promote
+    status:
+    - success
+    target:
+    - production
+
+- name: cancel-snow-change-production
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/snowtify:latest
+  settings:
+    comments: Failed deployment of ${DRONE_REPO}:${DRONE_COMMIT_SHA}
+    deployment_outcome: fail
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_ENDPOINT:
+      from_secret: PRODUCTION_SERVICE_NOW_URL
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+    SNOW_PROD_PASS:
+      from_secret: PRODUCTION_SERVICE_NOW_PASSWORD
+    SNOW_PROD_USER:
+      from_secret: PRODUCTION_SERVICE_NOW_USERNAME
+  when:
+    event:
+    - promote
+    status:
+    - failure
+    target:
+    - production
+
+depends_on:
+- build
+
+---
+kind: pipeline
+type: kubernetes
+name: deploy_eforms
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+- name: deploy_to_dev_eforms
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/kd
+  commands:
+  - export API_FORM_TAG=$${DRONE_COMMIT_SHA}
+  - kd --insecure-skip-tls-verify -f kube/cert.yml
+  - kd --insecure-skip-tls-verify -f kube/secret.yml
+  - kd --insecure-skip-tls-verify -f kube/network-policy.yml
+  - kd --insecure-skip-tls-verify -f kube/service.yml
+  - kd --insecure-skip-tls-verify -f kube/deployment.yml --timeout=5m
+  - kd --insecure-skip-tls-verify -f kube/ingress.yml
+  environment:
+    API_FORM_BUSINESS_KEY_ENABLED:
+      from_secret: DEV_API_FORM_EFORMS_BUSINESS_KEY_ENABLED
+    API_FORM_BUSINESS_KEY_PREFIX:
+      from_secret: DEV_API_FORM_EFORMS_BUSINESS_KEY_PREFIX
+    API_FORM_CACHE_FORM_MAX_AGE:
+      from_secret: DEV_API_FORM_CACHE_FORM_MAX_AGE
+    API_FORM_CACHE_FORM_MAX_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_FORM_MAX_ENTRIES
+    API_FORM_CACHE_ROLE_MAX_AGE:
+      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_AGE
+    API_FORM_CACHE_ROLE_MAX_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_ENTRIES
+    API_FORM_CACHE_USER_FORM_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_USER_FORM_ENTRIES
+    API_FORM_CACHE_USER_MAX_AGE:
+      from_secret: DEV_API_FORM_CACHE_USER_MAX_AGE
+    API_FORM_CACHE_USER_MAX_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_USER_MAX_ENTRIES
+    API_FORM_CACHE_USER_ROLE_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_USER_ROLE_ENTRIES
+    API_FORM_EDIT_ROLES:
+      from_secret: DEV_API_FORM_EFORMS_EDIT_ROLES
+    API_FORM_IMAGE:
+      from_secret: DEV_API_FORM_IMAGE
+    API_FORM_KEYCLOAK_ADMIN_PASSWORD:
+      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_ADMIN_PASSWORD
+    API_FORM_KEYCLOAK_ADMIN_USERNAME:
+      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_ADMIN_USERNAME
+    API_FORM_KEYCLOAK_BEARER_ONLY:
+      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_BEARER_ONLY
+    API_FORM_KEYCLOAK_CLIENT_ID:
+      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_CLIENT_ID
+    API_FORM_KEYCLOAK_ROLES:
+      from_secret: DEV_API_FORM_EFORMS_KEYCLOAK_ROLES
+    API_FORM_LOG_CHANGE_TIMEOUT:
+      from_secret: DEV_API_FORM_LOG_CHANGE_TIMEOUT
+    API_FORM_LOG_ENABLE_CHANGE:
+      from_secret: DEV_API_FORM_LOG_ENABLE_CHANGE
+    API_FORM_LOG_ENABLE_QUERY:
+      from_secret: DEV_API_FORM_LOG_ENABLE_QUERY
+    API_FORM_NAME:
+      from_secret: DEV_API_FORM_NAME
+    API_FORM_PORT:
+      from_secret: DEV_API_FORM_PORT
+    API_FORM_URL:
+      from_secret: DEV_API_FORM_EFORMS_URL
+    DB_FORM_DEFAULT_DBNAME:
+      from_secret: DEV_DB_EFORMS_DEFAULT_DBNAME
+    DB_FORM_DEFAULT_PASSWORD:
+      from_secret: DEV_DB_EFORMS_DEFAULT_PASSWORD
+    DB_FORM_DEFAULT_USERNAME:
+      from_secret: DEV_DB_EFORMS_DEFAULT_USERNAME
+    DB_FORM_HOSTNAME:
+      from_secret: DEV_DB_EFORMS_HOSTNAME
+    DB_FORM_PORT:
+      from_secret: DEV_DB_EFORMS_PORT
+    DB_FORM_SSL:
+      from_secret: DEV_DB_FORM_SSL
+    KEYCLOAK_PROTOCOL:
+      from_secret: PROTOCOL_HTTPS
+    KEYCLOAK_REALM:
+      from_secret: DEV_KEYCLOAK_REALM
+    KEYCLOAK_URL:
+      from_secret: DEV_KEYCLOAK_URL
+    KUBE_NAMESPACE:
+      from_secret: DEV_KUBE_NAMESPACE_COP_EFORMS
+    KUBE_SERVER:
+      from_secret: DEV_KUBE_SERVER
+    KUBE_TOKEN:
+      from_secret: DEV_EFORMS_KUBE_TOKEN
+    NGINX_IMAGE:
+      from_secret: NGINX_IMAGE
+    NGINX_TAG:
+      from_secret: NGINX_TAG
+    REDIS_PORT:
+      from_secret: DEV_REDIS_EFORMS_PORT
+    REDIS_SSL:
+      from_secret: DEV_REDIS_EFORMS_SSL
+    REDIS_TOKEN:
+      from_secret: DEV_REDIS_EFORMS_TOKEN
+    REDIS_URL:
+      from_secret: DEV_REDIS_EFORMS_URL
+    WHITELIST:
+      from_secret: DEV_WHITELIST
+  when:
+    branch:
+    - master
+    event:
+    - push
 
 - name: deploy_to_production_eforms
   pull: if-not-exists
@@ -858,7 +785,7 @@ steps:
     event:
     - promote
     target:
-    - production
+    - production_eforms
 
 - name: open-snow-change-production
   pull: if-not-exists
@@ -877,7 +804,7 @@ steps:
     event:
     - promote
     target:
-    - production
+    - production_eforms
 
 - name: complete-snow-change-production
   pull: if-not-exists
@@ -900,7 +827,7 @@ steps:
     status:
     - success
     target:
-    - production
+    - production_eforms
 
 - name: cancel-snow-change-production
   pull: if-not-exists
@@ -923,36 +850,308 @@ steps:
     status:
     - failure
     target:
-    - production
+    - production_eforms
 
-- name: notify
+depends_on:
+- build
+
+---
+kind: pipeline
+type: kubernetes
+name: deploy_cerberus
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+- name: deploy_to_dev_cerberus
   pull: if-not-exists
-  image: plugins/slack
-  settings:
-    channel: cop-deployments
-    template: "{{#build.deployTo}}\n  *{{repo.name}} - Build {{build.number}} - {{uppercasefirst build.deployTo}} - {{uppercase build.status}}*\n  {{build.link}}\n{{else}}\n  *{{repo.name}} - Build {{build.number}} - Development - {{uppercase build.status}}*\n  {{build.link}}\n{{/build.deployTo}}\n"
-    username: Drone Build Watcher
+  image: quay.io/ukhomeofficedigital/kd
+  commands:
+  - export API_FORM_TAG=$${DRONE_COMMIT_SHA}
+  - kd --insecure-skip-tls-verify -f kube/cert.yml
+  - kd --insecure-skip-tls-verify -f kube/secret.yml
+  - kd --insecure-skip-tls-verify -f kube/network-policy.yml
+  - kd --insecure-skip-tls-verify -f kube/service.yml
+  - kd --insecure-skip-tls-verify -f kube/deployment.yml --timeout=5m
+  - kd --insecure-skip-tls-verify -f kube/ingress.yml
   environment:
-    SLACK_WEBHOOK:
-      from_secret: SLACK_WEBHOOK
+    API_FORM_BUSINESS_KEY_ENABLED:
+      from_secret: DEV_API_FORM_CERBERUS_BUSINESS_KEY_ENABLED
+    API_FORM_BUSINESS_KEY_PREFIX:
+      from_secret: DEV_API_FORM_CERBERUS_BUSINESS_KEY_PREFIX
+    API_FORM_CACHE_FORM_MAX_AGE:
+      from_secret: DEV_API_FORM_CACHE_FORM_MAX_AGE
+    API_FORM_CACHE_FORM_MAX_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_FORM_MAX_ENTRIES
+    API_FORM_CACHE_ROLE_MAX_AGE:
+      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_AGE
+    API_FORM_CACHE_ROLE_MAX_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_ROLE_MAX_ENTRIES
+    API_FORM_CACHE_USER_FORM_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_USER_FORM_ENTRIES
+    API_FORM_CACHE_USER_MAX_AGE:
+      from_secret: DEV_API_FORM_CACHE_USER_MAX_AGE
+    API_FORM_CACHE_USER_MAX_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_USER_MAX_ENTRIES
+    API_FORM_CACHE_USER_ROLE_ENTRIES:
+      from_secret: DEV_API_FORM_CACHE_USER_ROLE_ENTRIES
+    API_FORM_EDIT_ROLES:
+      from_secret: DEV_API_FORM_CERBERUS_EDIT_ROLES
+    API_FORM_IMAGE:
+      from_secret: DEV_API_FORM_IMAGE
+    API_FORM_KEYCLOAK_ADMIN_PASSWORD:
+      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_ADMIN_PASSWORD
+    API_FORM_KEYCLOAK_ADMIN_USERNAME:
+      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_ADMIN_USERNAME
+    API_FORM_KEYCLOAK_BEARER_ONLY:
+      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_BEARER_ONLY
+    API_FORM_KEYCLOAK_CLIENT_ID:
+      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_CLIENT_ID
+    API_FORM_KEYCLOAK_ROLES:
+      from_secret: DEV_API_FORM_CERBERUS_KEYCLOAK_ROLES
+    API_FORM_LOG_CHANGE_TIMEOUT:
+      from_secret: DEV_API_FORM_LOG_CHANGE_TIMEOUT
+    API_FORM_LOG_ENABLE_CHANGE:
+      from_secret: DEV_API_FORM_LOG_ENABLE_CHANGE
+    API_FORM_LOG_ENABLE_QUERY:
+      from_secret: DEV_API_FORM_LOG_ENABLE_QUERY
+    API_FORM_NAME:
+      from_secret: DEV_API_FORM_NAME
+    API_FORM_PORT:
+      from_secret: DEV_API_FORM_PORT
+    API_FORM_URL:
+      from_secret: DEV_API_FORM_CERBERUS_URL
+    DB_FORM_DEFAULT_DBNAME:
+      from_secret: DEV_DB_CERBERUS_DEFAULT_DBNAME
+    DB_FORM_DEFAULT_PASSWORD:
+      from_secret: DEV_DB_CERBERUS_DEFAULT_PASSWORD
+    DB_FORM_DEFAULT_USERNAME:
+      from_secret: DEV_DB_CERBERUS_DEFAULT_USERNAME
+    DB_FORM_HOSTNAME:
+      from_secret: DEV_DB_CERBERUS_HOSTNAME
+    DB_FORM_PORT:
+      from_secret: DEV_DB_CERBERUS_PORT
+    DB_FORM_SSL:
+      from_secret: DEV_DB_FORM_SSL
+    KEYCLOAK_PROTOCOL:
+      from_secret: PROTOCOL_HTTPS
+    KEYCLOAK_REALM:
+      from_secret: DEV_KEYCLOAK_REALM
+    KEYCLOAK_URL:
+      from_secret: DEV_KEYCLOAK_URL
+    KUBE_NAMESPACE:
+      from_secret: DEV_KUBE_NAMESPACE_COP_CERBERUS
+    KUBE_SERVER:
+      from_secret: DEV_KUBE_SERVER
+    KUBE_TOKEN:
+      from_secret: DEV_CERBERUS_KUBE_TOKEN
+    NGINX_IMAGE:
+      from_secret: NGINX_IMAGE
+    NGINX_TAG:
+      from_secret: NGINX_TAG
+    REDIS_PORT:
+      from_secret: DEV_REDIS_CERBERUS_PORT
+    REDIS_SSL:
+      from_secret: DEV_REDIS_CERBERUS_SSL
+    REDIS_TOKEN:
+      from_secret: DEV_REDIS_CERBERUS_TOKEN
+    REDIS_URL:
+      from_secret: DEV_REDIS_CERBERUS_URL
+    WHITELIST:
+      from_secret: DEV_WHITELIST
   when:
     branch:
     - master
     event:
     - push
+
+- name: deploy_to_staging_cerberus
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/kd
+  commands:
+  - export API_FORM_TAG=$${DRONE_COMMIT_SHA}
+  - kd --insecure-skip-tls-verify -f kube/cert.yml
+  - kd --insecure-skip-tls-verify -f kube/secret.yml
+  - kd --insecure-skip-tls-verify -f kube/network-policy.yml
+  - kd --insecure-skip-tls-verify -f kube/service.yml
+  - kd --insecure-skip-tls-verify -f kube/deployment.yml --timeout=5m
+  - kd --insecure-skip-tls-verify -f kube/ingress.yml
+  environment:
+    API_FORM_BUSINESS_KEY_ENABLED:
+      from_secret: STAGING_API_FORM_CERBERUS_BUSINESS_KEY_ENABLED
+    API_FORM_BUSINESS_KEY_PREFIX:
+      from_secret: STAGING_API_FORM_CERBERUS_BUSINESS_KEY_PREFIX
+    API_FORM_CACHE_FORM_MAX_AGE:
+      from_secret: STAGING_API_FORM_CACHE_FORM_MAX_AGE
+    API_FORM_CACHE_FORM_MAX_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_FORM_MAX_ENTRIES
+    API_FORM_CACHE_ROLE_MAX_AGE:
+      from_secret: STAGING_API_FORM_CACHE_ROLE_MAX_AGE
+    API_FORM_CACHE_ROLE_MAX_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_ROLE_MAX_ENTRIES
+    API_FORM_CACHE_USER_FORM_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_USER_FORM_ENTRIES
+    API_FORM_CACHE_USER_MAX_AGE:
+      from_secret: STAGING_API_FORM_CACHE_USER_MAX_AGE
+    API_FORM_CACHE_USER_MAX_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_USER_MAX_ENTRIES
+    API_FORM_CACHE_USER_ROLE_ENTRIES:
+      from_secret: STAGING_API_FORM_CACHE_USER_ROLE_ENTRIES
+    API_FORM_EDIT_ROLES:
+      from_secret: STAGING_API_FORM_CERBERUS_EDIT_ROLES
+    API_FORM_IMAGE:
+      from_secret: STAGING_API_FORM_IMAGE
+    API_FORM_KEYCLOAK_ADMIN_PASSWORD:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ADMIN_PASSWORD
+    API_FORM_KEYCLOAK_ADMIN_USERNAME:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ADMIN_USERNAME
+    API_FORM_KEYCLOAK_BEARER_ONLY:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_BEARER_ONLY
+    API_FORM_KEYCLOAK_CLIENT_ID:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_CLIENT_ID
+    API_FORM_KEYCLOAK_ROLES:
+      from_secret: STAGING_API_FORM_CERBERUS_KEYCLOAK_ROLES
+    API_FORM_LOG_CHANGE_TIMEOUT:
+      from_secret: STAGING_API_FORM_LOG_CHANGE_TIMEOUT
+    API_FORM_LOG_ENABLE_CHANGE:
+      from_secret: STAGING_API_FORM_LOG_ENABLE_CHANGE
+    API_FORM_LOG_ENABLE_QUERY:
+      from_secret: STAGING_API_FORM_LOG_ENABLE_QUERY
+    API_FORM_NAME:
+      from_secret: STAGING_API_FORM_NAME
+    API_FORM_PORT:
+      from_secret: STAGING_API_FORM_PORT
+    API_FORM_URL:
+      from_secret: STAGING_API_FORM_CERBERUS_URL
+    DB_FORM_DEFAULT_DBNAME:
+      from_secret: STAGING_DB_CERBERUS_DEFAULT_DBNAME
+    DB_FORM_DEFAULT_PASSWORD:
+      from_secret: STAGING_DB_CERBERUS_DEFAULT_PASSWORD
+    DB_FORM_DEFAULT_USERNAME:
+      from_secret: STAGING_DB_CERBERUS_DEFAULT_USERNAME
+    DB_FORM_HOSTNAME:
+      from_secret: STAGING_DB_CERBERUS_HOSTNAME
+    DB_FORM_PORT:
+      from_secret: STAGING_DB_CERBERUS_PORT
+    DB_FORM_SSL:
+      from_secret: STAGING_DB_FORM_SSL
+    KEYCLOAK_PROTOCOL:
+      from_secret: PROTOCOL_HTTPS
+    KEYCLOAK_REALM:
+      from_secret: STAGING_KEYCLOAK_REALM
+    KEYCLOAK_URL:
+      from_secret: STAGING_KEYCLOAK_URL
+    KUBE_NAMESPACE:
+      from_secret: STAGING_KUBE_NAMESPACE_COP_CERBERUS
+    KUBE_SERVER:
+      from_secret: STAGING_KUBE_SERVER
+    KUBE_TOKEN:
+      from_secret: STAGING_CERBERUS_KUBE_TOKEN
+    NGINX_IMAGE:
+      from_secret: NGINX_IMAGE
+    NGINX_TAG:
+      from_secret: NGINX_TAG
+    REDIS_PORT:
+      from_secret: STAGING_REDIS_CERBERUS_PORT
+    REDIS_SSL:
+      from_secret: STAGING_REDIS_CERBERUS_SSL
+    REDIS_TOKEN:
+      from_secret: STAGING_REDIS_CERBERUS_TOKEN
+    REDIS_URL:
+      from_secret: STAGING_REDIS_CERBERUS_URL
+    WHITELIST:
+      from_secret: STAGING_WHITELIST
+  when:
+    branch:
+    - master
+    event:
+    - promote
+    target:
+    - staging_cerberus
+
+- name: create-change-desc-production
+  pull: if-not-exists
+  image: docker:git
+  commands:
+  - n=0; while [ "$n" -lt 60 ] && [ ! docker stats --no-stream ]; do n=$(( n + 1 )); sleep 1; done
+  - git show --name-only >> $SNOW_DESC_FILE
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+  when:
+    event:
+    - promote
+    target:
+    - production_cerberus
+
+- name: open-snow-change-production
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/snowtify:latest
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_ENDPOINT:
+      from_secret: PRODUCTION_SERVICE_NOW_URL
+    SNOW_EXTERNAL_ID: ${DRONE_REPO}:${DRONE_COMMIT_SHA}
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+    SNOW_PROD_PASS:
+      from_secret: PRODUCTION_SERVICE_NOW_PASSWORD
+    SNOW_PROD_USER:
+      from_secret: PRODUCTION_SERVICE_NOW_USERNAME
+  when:
+    event:
+    - promote
+    target:
+    - production_cerberus
+
+- name: complete-snow-change-production
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/snowtify:latest
+  settings:
+    comments: Successful deployment of ${DRONE_REPO}:${DRONE_COMMIT_SHA}
+    deployment_outcome: success
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_ENDPOINT:
+      from_secret: PRODUCTION_SERVICE_NOW_URL
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+    SNOW_PROD_PASS:
+      from_secret: PRODUCTION_SERVICE_NOW_PASSWORD
+    SNOW_PROD_USER:
+      from_secret: PRODUCTION_SERVICE_NOW_USERNAME
+  when:
+    event:
     - promote
     status:
     - success
+    target:
+    - production_cerberus
+
+- name: cancel-snow-change-production
+  pull: if-not-exists
+  image: quay.io/ukhomeofficedigital/snowtify:latest
+  settings:
+    comments: Failed deployment of ${DRONE_REPO}:${DRONE_COMMIT_SHA}
+    deployment_outcome: fail
+  environment:
+    SNOW_DESC_FILE: /drone/src/change-desc.txt
+    SNOW_ENDPOINT:
+      from_secret: PRODUCTION_SERVICE_NOW_URL
+    SNOW_INT_ID_FILE: /drone/src/internal-id
+    SNOW_PROD_PASS:
+      from_secret: PRODUCTION_SERVICE_NOW_PASSWORD
+    SNOW_PROD_USER:
+      from_secret: PRODUCTION_SERVICE_NOW_USERNAME
+  when:
+    event:
+    - promote
+    status:
     - failure
+    target:
+    - production_cerberus
 
-services:
-- name: docker
-  image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/dind
-
-- name: anchore-submission-server
-  pull: always
-  image: 340268328991.dkr.ecr.eu-west-2.amazonaws.com/acp/anchore-submission:latest
-  commands:
-  - /run.sh server
+depends_on:
+- build
 
 ...
